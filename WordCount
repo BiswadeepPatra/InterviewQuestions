@@ -1,0 +1,23 @@
+ ##Scala##
+ 
+ val Input = sc.textFile("hdfs://...")
+val counts = Input.flatMap(line => line.split(" "))
+                 .map(word => (word, 1))
+                 .reduceByKey(_ + _)
+counts.saveAsTextFile("hdfs://...")
+
+/#
+.flatMap: we take the RDD of lines and transform it to an RDD of words
+.map: we transform RDD of words into RDD of tuples (word, 1). It’s also called key-value RDD
+.reduceByKey: for each key (word) we reduce all the values by summing all the values together. 
+Reduce operation (in general, not in Spark or Scala sense does this): 
+it takes some list, and applies some function many times to the previous result and next element,
+ e.g. [1,2,3,4,5].reduce(_ + _) will be translated into: ((((1+2)+3)+4)+5).
+ #/
+ 
+ ##Python##
+ Input = sc.textFile("hdfs://...")
+counts = Input.flatMap(lambda line: line.split(" ")) \
+             .map(lambda word: (word, 1)) \
+             .reduceByKey(lambda a, b: a + b)
+counts.saveAsTextFile("hdfs://...")
