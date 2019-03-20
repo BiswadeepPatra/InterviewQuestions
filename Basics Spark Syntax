@@ -1,0 +1,163 @@
+SparkRDD:-
+
+val sc = new SparkContext("local[*]", "WordCount")
+val Input = sc.textFile("hdfs://...")
+val counts = Input.flatMap(line => line.split(" "))
+                 .map(word => (word, 1))
+                 .reduceByKey(_ + _)
+counts.saveAsTextFile("hdfs://...")
+
+SparkSql :-
+
+
+val sqlcontext = new org.apache.spark.sql.SQLContext(sc)
+
+employee.json
+
+{{"id" : 1201, "name" : "satish", "age" : 25}
+{"id" : 1202, "name" : "krishna", "age" : 28}
+{"id" : 1203, "name" : "amith", "age" : 39}
+{"id" : 1204, "name" : "javed", "age" : 23}
+{"id" : 1205, "name" : "prudvi", "age" : 23}}
+
+case class Movies ( id:String, title:String, year:String,genre:String,Summary:String,country:String, )
+
+case class director ( id:String, last_name:String, first_name:String,year_of_birth:String )
+
+case class actors ( id:String, title:String, year:String,genre:String,Summary:String,country:String, )
+
+val dfs = sqlContext.read.json("employee.json")
+
+dfs.show()
+
+dfs.printSchema()
+
+dfs.select("name").show()
+
+dfs.filter(dfs("age") > 23).show()
+
+dfs.groupBy("age").count().show()
+
+
+
+employee.txt
+
+1201,Satish,25
+1202,Krishna,28
+1203,Amith,39
+1204,Javed,23
+1205,Prudvi,23
+
+val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
+import sqlContext.implicts._
+
+case class Employee(id: Int, name: String, age: Int)
+
+val empl=sc.textFile("employee.txt").map(_.split(",")).map(e=>employee(e(0).trim.toInt,e(1), e(2).trim.toInt)).toDF()
+
+empl.registerTempTable("employee")
+
+val allrecords = sqlContext.sql("SELECT * FROM employee")
+
+allrecords.show()
+
+val agefilter = sqlContext.sql("SELECT * FROM employee WHERE age>=20 AND age <= 35")
+
+agefilter.show()
+
+
+
+employee.txt
+
+1201,Satish,25
+1202,Krishna,28
+1203,Amith,39
+1204,Javed,23
+1205,Prudvi,23
+
+val hiveContext = new org.apache.spark.sql.hive.HiveContext(sc)
+
+hiveContext.sql("CREATE TABLE employee(id INT, name STRING, age INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ','")
+
+hiveContext.sql("LOAD DATA LOCAL INPATH '/home/cloudera/employee.txt' INTO TABLE employee")
+
+val result = hiveContext.sql("FROM employee SELECT id, name, age")
+
+val result = hiveContext.sql( "select * from artist ")
+
+result.show()
+
+
+
+val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
+val parqfile = sqlContext.read.parquet("file:///home/cloudera/order_items.parquet")
+
+parqfile.registerTempTable("order_items")
+
+val allrecords = sqlContext.sql("select * FROM order_items limit 3")
+
+allrecords.show()
+
+
+Streaming :-
+// Kafka setup instructions for Windows: https://dzone.com/articles/running-apache-kafka-on-windows-os
+
+package com.elearningpoint.sparkstreaming
+
+import org.apache.spark.SparkConf
+import org.apache.spark.streaming.{Seconds, StreamingContext}
+import org.apache.spark.storage.StorageLevel
+
+import java.util.regex.Pattern
+import java.util.regex.Matcher
+
+import Utilities._
+
+import org.apache.spark.streaming.kafka._
+import kafka.serializer.StringDecoder
+
+/** Working example of listening for log data from Kafka's testLogs topic on port 9092. */
+object KafkaExample {
+  
+  def main(args: Array[String]) {
+
+    // Create the context with a 1 second batch size
+    val ssc = new StreamingContext("local[*]", "KafkaExample", Seconds(1))
+    
+    setupLogging()
+    
+    // Construct a regular expression (regex) to extract fields from raw Apache log lines
+    val pattern = apacheLogPattern()
+
+    // hostname:port for Kafka brokers, not Zookeeper
+    val kafkaParams = Map("metadata.broker.list" -> "localhost:9092")
+    // List of topics you want to listen for from Kafka
+    val topics = List("testLogs").toSet
+    // Create our Kafka stream, which will contain (topic,message) pairs. We tack a 
+    // map(_._2) at the end in order to only get the messages, which contain individual
+    // lines of data.
+    val lines = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](
+      ssc, kafkaParams, topics).map(_._2)
+     
+    // Extract the request field from each log line
+    val requests = lines.map(x => {val matcher:Matcher = pattern.matcher(x); if (matcher.matches()) matcher.group(5)})
+    
+    // Extract the URL from the request
+    val urls = requests.map(x => {val arr = x.toString().split(" "); if (arr.size == 3) arr(1) else "[error]"})
+    
+    // Reduce by URL over a 5-minute window sliding every second
+    val urlCounts = urls.map(x => (x, 1)).reduceByKeyAndWindow(_ + _, _ - _, Seconds(300), Seconds(1))
+    
+    // Sort and print the results
+    val sortedResults = urlCounts.transform(rdd => rdd.sortBy(x => x._2, false))
+    sortedResults.print()
+    
+    // Kick it off
+    ssc.checkpoint("C:/checkpoint/")
+    ssc.start()
+    ssc.awaitTermination()
+  }
+}
+
